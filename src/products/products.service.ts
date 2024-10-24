@@ -41,12 +41,36 @@ export class ProductsService {
     return product;
   }
 
-  async findAll() {
-    return await this.prisma.product.findMany({
-      include: {
-        categories: true,
+  async findAll(offset: number = 0, limit: number = 10, keyword: string = '') {
+    const totalRecordCount = await this.prisma.product.count({
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          { description: { contains: keyword, mode: 'insensitive' } },
+        ],
       },
     });
+
+    const products = await this.prisma.product.findMany({
+      skip: offset,
+      take: limit,
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          { description: { contains: keyword, mode: 'insensitive' } },
+        ],
+      },
+    });
+
+    const pageNumber = Math.ceil((offset + 1) / limit);
+    const pageSize = limit;
+
+    return {
+      page_number: pageNumber,
+      page_size: pageSize,
+      total_record_count: totalRecordCount,
+      products: products,
+    };
   }
 
   async findOne(id: string) {
