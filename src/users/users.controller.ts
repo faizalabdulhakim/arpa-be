@@ -6,6 +6,8 @@ import {
   Param,
   Patch,
   Post,
+  Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
@@ -19,8 +21,12 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(
+    @Query('offset') offset: number,
+    @Query('limit') limit: number,
+    @Query('keyword') keyword: string,
+  ) {
+    return this.usersService.findAll(offset, limit, keyword);
   }
 
   @Get(':id')
@@ -38,7 +44,7 @@ export class UsersController {
     return this.usersService.remove(id);
   }
 
-  @Post(':id/cart')
+  @Post('cart/:id')
   addProductToCart(@Param('id') id: string, @Body() addCartDto: AddCartDto) {
     return this.usersService.addProductToCart(id, addCartDto);
   }
@@ -54,5 +60,10 @@ export class UsersController {
   @Get(':id/cart')
   getCart(@Param('id') id: string) {
     return this.usersService.findUserCart(id);
+  }
+
+  @Patch(':id/promote')
+  promoteUser(@Param('id') id: string) {
+    return this.usersService.promoteUser(id);
   }
 }

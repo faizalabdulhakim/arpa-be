@@ -7,38 +7,45 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class ProductsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createProductDto: CreateProductDto) {
+  async create(createProductDto: CreateProductDto, file: Express.Multer.File) {
     const { categories, ...data } = createProductDto;
+    const categoryIds = Array.isArray(categories) ? categories : [categories];
 
     // if categories not exist in category
     const existingCategories = await this.prisma.category.findMany({
       where: {
         id: {
-          in: categories,
+          in: categoryIds,
         },
       },
     });
 
-    if (existingCategories.length !== categories.length) {
+    const imagePath = file.filename;
+
+    if (existingCategories.length !== categoryIds.length) {
       throw new BadRequestException('Category not found');
     }
 
-    const product = await this.prisma.product.create({
-      data: {
-        ...data,
-        categories: {
-          create: categories.map((category) => ({
-            category: {
-              connect: {
-                id: category,
+    try {
+      const product = await this.prisma.product.create({
+        data: {
+          ...data,
+          image: imagePath,
+          categories: {
+            create: categoryIds.map((categoryId) => ({
+              category: {
+                connect: {
+                  id: categoryId,
+                },
               },
-            },
-          })),
+            })),
+          },
         },
-      },
-    });
-
-    return product;
+      });
+      return product;
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   async findAll(offset: number = 0, limit: number = 10, keyword: string = '') {
@@ -52,18 +59,32 @@ export class ProductsService {
     });
 
     const products = await this.prisma.product.findMany({
-      skip: offset,
-      take: limit,
+      skip: +offset || 0,
+      take: +limit || 10,
       where: {
         OR: [
           { name: { contains: keyword, mode: 'insensitive' } },
           { description: { contains: keyword, mode: 'insensitive' } },
         ],
       },
+      orderBy: {
+        createdAt: 'asc',
+      },
+      include: {
+        categories: {
+          select: {
+            category: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    const pageNumber = Math.ceil((offset + 1) / limit);
-    const pageSize = limit;
+    const pageNumber = Math.ceil((+offset + 1) / +limit);
+    const pageSize = +limit;
 
     return {
       page_number: pageNumber,
@@ -84,50 +105,81 @@ export class ProductsService {
     });
   }
 
-  async update(id: string, updateProductDto: UpdateProductDto) {
-    const { categories, ...data } = updateProductDto;
+  async update(
+    id: string,
+    updateProductDto: UpdateProductDto,
+    file: Express.Multer.File,
+  ) {
+    const { categories, image, ...data } = updateProductDto;
+    const categoryIds = Array.isArray(categories) ? categories : [categories];
 
-    if (categories === undefined || categories.length === 0) {
-      return await this.prisma.product.update({
-        where: {
-          id: id,
-        },
-        data: {
-          ...data,
-        },
-      });
-    }
-
+    // Check if categories exist in the database
     const existingCategories = await this.prisma.category.findMany({
       where: {
-        id: {
-          in: categories,
-        },
+        id: { in: categoryIds },
       },
     });
 
-    if (existingCategories.length !== categories.length) {
-      throw new BadRequestException('Category not found');
+    if (existingCategories.length !== categoryIds.length) {
+      throw new BadRequestException('One or more categories not found');
     }
 
-    const product = await this.prisma.product.update({
-      where: {
-        id: id,
-      },
-      data: {
-        ...data,
-        categories: {
-          set: categories.map((category) => ({
-            product_id_category_id: {
-              category_id: category,
-              product_id: id,
-            },
-          })),
-        },
-      },
-    });
+    const imagePath = file ? file.filename : image;
 
-    return product;
+    // Fetch existing categories of the product
+    const existingProductCategories =
+      await this.prisma.productsOnCategories.findMany({
+        where: { product_id: id },
+      });
+
+    const existingProductCategoryIds = existingProductCategories.map(
+      (productCategory) => productCategory.category_id,
+    );
+
+    // Find categories to delete (currently in the product but not in the update)
+    const categoriesToDelete = existingProductCategoryIds.filter(
+      (categoryId) => !categoryIds.includes(categoryId),
+    );
+
+    // Find categories to add (in the update but not currently in the product)
+    const categoriesToAdd = categoryIds.filter(
+      (categoryId) => !existingProductCategoryIds.includes(categoryId),
+    );
+
+    try {
+      if (categoriesToAdd.length === 0 && categoriesToDelete.length === 0) {
+        // No category update needed
+        console.log('No categories update');
+        return await this.prisma.product.update({
+          where: { id },
+          data: {
+            ...data,
+            image: imagePath,
+          },
+        });
+      } else {
+        // Update categories by adding and/or removing associations
+        return await this.prisma.product.update({
+          where: { id },
+          data: {
+            ...data,
+            image: imagePath,
+            categories: {
+              deleteMany: categoriesToDelete.map((categoryId) => ({
+                category_id: categoryId,
+              })),
+              create: categoriesToAdd.map((categoryId) => ({
+                category: {
+                  connect: { id: categoryId },
+                },
+              })),
+            },
+          },
+        });
+      }
+    } catch (error) {
+      throw new BadRequestException(error.message);
+    }
   }
 
   async remove(id: string) {

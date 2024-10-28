@@ -21,8 +21,33 @@ export class CategoriesService {
     return category;
   }
 
-  async findAll() {
-    return await this.prisma.category.findMany();
+  async findAll(offset: number = 0, limit: number = 10, keyword: string = '') {
+    const totalRecordCount = await this.prisma.category.count({
+      where: {
+        OR: [{ name: { contains: keyword, mode: 'insensitive' } }],
+      },
+    });
+
+    const categories = await this.prisma.category.findMany({
+      skip: +offset || 0,
+      take: +limit || 10,
+      where: {
+        OR: [{ name: { contains: keyword, mode: 'insensitive' } }],
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    const pageNumber = Math.ceil((+offset + 1) / +limit);
+    const pageSize = +limit;
+
+    return {
+      page_number: pageNumber,
+      page_size: pageSize,
+      total_record_count: totalRecordCount,
+      categories: categories,
+    };
   }
 
   async findOne(id: string) {

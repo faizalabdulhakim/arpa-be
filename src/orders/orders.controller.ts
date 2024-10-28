@@ -7,11 +7,13 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderDto } from './dto/update-order.dto';
 import { AuthGuard } from 'src/auth/auth.guard';
+import { Status } from '@prisma/client';
 
 @UseGuards(AuthGuard)
 @Controller('orders')
@@ -24,8 +26,8 @@ export class OrdersController {
   }
 
   @Get()
-  findAll() {
-    return this.ordersService.findAll();
+  findAll(@Query('offset') offset: number, @Query('limit') limit: number) {
+    return this.ordersService.findAll(offset, limit);
   }
 
   @Get(':id')
@@ -38,14 +40,18 @@ export class OrdersController {
     return this.ordersService.update(id, updateOrderDto);
   }
 
+  @Patch('/status/:id')
+  updateStatus(@Param('id') id: string, @Body('status') status: Status) {
+    return this.ordersService.updateStatus(id, status as any);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.ordersService.remove(id);
   }
 
   // Checkout
-
-  @Post(':id/checkout')
+  @Post('checkout/:id')
   checkout(@Param('id') user_id: string) {
     return this.ordersService.checkout(user_id);
   }

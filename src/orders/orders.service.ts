@@ -63,7 +63,7 @@ export class OrdersService {
                 id: product.product_id,
               },
             },
-            quantity: product.quantity,
+            quantity: +product.quantity,
           })),
         },
       },
@@ -72,12 +72,71 @@ export class OrdersService {
     return order;
   }
 
-  async findAll() {
-    return `This action returns all orders`;
+  async findAll(offset: number = 0, limit: number = 10) {
+    const totalRecordCount = await this.prisma.order.count();
+
+    const orders = await this.prisma.order.findMany({
+      skip: +offset || 0,
+      take: +limit || 10,
+      orderBy: {
+        createdAt: 'asc',
+      },
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+        products: {
+          select: {
+            quantity: true,
+            product: {
+              select: {
+                name: true,
+                price: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const pageNumber = Math.ceil((+offset + 1) / +limit);
+    const pageSize = +limit;
+
+    return {
+      page_number: pageNumber,
+      page_size: pageSize,
+      total_record_count: totalRecordCount,
+      orders: orders,
+    };
   }
 
   async findOne(id: string) {
-    return `This action returns a #${id} order`;
+    const order = await this.prisma.order.findFirst({
+      where: { id: id },
+      include: {
+        user: {
+          select: {
+            name: true,
+          },
+        },
+        products: {
+          select: {
+            quantity: true,
+            product: {
+              select: {
+                name: true,
+                price: true,
+                image: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return order;
   }
 
   async update(id: string, updateOrderDto: UpdateOrderDto) {
@@ -132,6 +191,18 @@ export class OrdersService {
     // Clear the shopping cart
     await this.prisma.shoppingCart.deleteMany({
       where: { user_id: user_id },
+    });
+
+    return order;
+  }
+
+  async updateStatus(
+    id: string,
+    status: 'PROCESSING' | 'SHIPPED' | 'DELIVERED',
+  ) {
+    const order = await this.prisma.order.update({
+      where: { id: id },
+      data: { status: status as any },
     });
 
     return order;

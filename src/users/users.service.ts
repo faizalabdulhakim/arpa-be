@@ -11,8 +11,39 @@ export type User = any;
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async findAll() {
-    return await this.prisma.user.findMany();
+  async findAll(offset: number = 0, limit: number = 10, keyword: string = '') {
+    const totalRecordCount = await this.prisma.user.count({
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          { email: { contains: keyword, mode: 'insensitive' } },
+        ],
+      },
+    });
+
+    const users = await this.prisma.user.findMany({
+      skip: +offset || 0,
+      take: +limit || 10,
+      where: {
+        OR: [
+          { name: { contains: keyword, mode: 'insensitive' } },
+          { email: { contains: keyword, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
+
+    const pageNumber = Math.ceil((+offset + 1) / +limit);
+    const pageSize = +limit;
+
+    return {
+      page_number: pageNumber,
+      page_size: pageSize,
+      total_record_count: totalRecordCount,
+      users: users,
+    };
   }
 
   async findOneByEmail(email: string) {
@@ -48,10 +79,12 @@ export class UsersService {
     }
 
     const { passwordConfirmation, ...userData } = createUserDto;
+    const role = 'USER';
 
     const user = await this.prisma.user.create({
       data: {
         ...userData,
+        role: role,
         password: hashedPassword,
       },
     });
@@ -174,5 +207,20 @@ export class UsersService {
         },
       },
     });
+  }
+
+  async promoteUser(id: string) {
+    try {
+      const user = await this.prisma.user.update({
+        where: { id: id },
+        data: {
+          role: 'ADMIN',
+        },
+      });
+
+      return user;
+    } catch (error) {
+      throw new BadRequestException('Error promoting user');
+    }
   }
 }

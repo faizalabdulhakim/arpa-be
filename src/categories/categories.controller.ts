@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
@@ -24,8 +25,12 @@ export class CategoriesController {
   }
 
   @Get()
-  findAll() {
-    return this.categoriesService.findAll();
+  findAll(
+    @Query('offset') offset: number,
+    @Query('limit') limit: number,
+    @Query('keyword') keyword: string,
+  ) {
+    return this.categoriesService.findAll(offset, limit, keyword);
   }
 
   @Get(':id')
