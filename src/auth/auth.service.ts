@@ -27,10 +27,13 @@ export class AuthService {
       throw new UnauthorizedException('Email or password is incorrect');
     }
 
-    const payload = { sub: user.id, email: user.email };
-    return {
-      access_token: await this.jwtService.signAsync(payload),
-    };
+    try {
+      const payload = { sub: user.id, email: user.email };
+
+      return { access_token: await this.jwtService.signAsync(payload) };
+    } catch (error) {
+      throw new UnauthorizedException(error.message);
+    }
   }
 
   async signOut() {
